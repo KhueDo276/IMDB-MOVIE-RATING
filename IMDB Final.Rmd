@@ -1,0 +1,148 @@
+---
+title: "IMDB_RMarkdown"
+author: "Group 12"
+date: "11/23/2022"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Clean Data
+```{r}
+
+IMDB <- read.csv(file = '/Users/khuedo/Desktop/UH-CS/MATH4322/Project/imdb_top_1000.csv')[, -c(1, 2, 8, 10:14)]
+#parse runtime into number
+IMDB$Runtime <- as.numeric(gsub(".*?([0-9]+).*", "\\1", IMDB[, "Runtime"]))
+#group release year by decades (100 unique vals)
+IMDB$Released_Year <- as.numeric(IMDB$Released_Year)
+#group released year into decades
+IMDB$Released_Year <- floor((IMDB$Released_Year - 1920) / 10) + 2
+
+#turn it into categorical
+IMDB$Released_Year <- as.factor(IMDB$Released_Year)
+#omit missing vals
+IMDB <- na.omit(IMDB)
+```  
+Introduction  
+Rating in the movie motivates people to watch it or not. Our team chose to create a model where we could look at the rating of the top 1000 IMDB movies.The source of our data comes from Kaggle (Owned by Anuj Singh) which compiles data from IMDB rating. The data contain variables for each movie to include: release year, genre, gross, meta score, run time, cast, director and summary of the movie, which we will use as predictors. It’s important to be able to predict whether the movie is high rated or not as a way to help the producer know what to expect and how to increase their movie rating.  
+We will examine the dataset to infer the relationship between rating and other factors. The questions that we seek to answer throughout our analysis are:  
+(1) Which factors demonstrate a statistically significant relationship to movie rating?  
+(2) How accurate is our model in terms of predicting movie ratings?  
+
+About the Data  
+IMDBRating variables will be our response for regression. Released_Year, Meta_score, No_of_votes, Runtime and Gross are predictors. We will investigate potential relationships between the response variable and the predictors. Released_Year is grouped by decade for easier interpretation.  
+Our goal is to predict the IMDBRating based on the predictors variable. The idea is to apply different regression techniques to the dataset to compare the results to potentially enhance the accuracy of the learned model. Our objective is to predict the rating of the movies by using the given data.  
+Our data question is: How can we accurately predict the movie rating based on the predictors?  
+Linear Regression Model  
+Because the response variable  IMDBRating is quantitative, the linear regression model is a straight-forward approach to analyzing the data. The advantages of this approach are being simple to perform and being easy to interpret. However, the disadvantages are that it assumes a straight-line relationship between variables, outliers and high leverage points can influence the model heavily which will be prone to overfitting. We will correct these issues by using the step function to determine which variables are the most statically significant, which will help us narrow down the most important variables, removing unusual data points as appropriate, and performing cross-validation to enhance predictive accuracy.  
+The goal is to predict the IMDBRating values on IMDB with certain predictors. In this part, we are focusing on utilizing a linear regression to find the most important variables in predicting IMDBRating.  
+We start by fitting a preliminary regression model on the dataset, comparing all seven predictors against IMDBRating. Note that for a linear regression model, the model formula is:  
+Y= Bo+B1X1 + B2X2 + B3X3 + B4X4 + B5X5 + B6X6 + B7X7 .  
+In which Y represents the response variable IMDBRating,  o represents the model intercept, Xi  for i=1,2…,7 represents predictors Released_Year, Certificate, Runtime, Genre,Meta_score,No_of_Votes, Gross, with i represent their respective coefficient.  
+We fit the regression model with IMDBRating as a response variable and all other variables as predictors. 
+
+```{r}
+IMDB_Rating.fit.lm=lm(IMDB_Rating~.,data=IMDB)
+summary(IMDB_Rating.fit.lm)  
+```  
+We get top factors that significantly affect rating are Meta_score,No_of_Votes, Gross, and Runtime. We also consider Released_year categories significant because we have 6/10 of them are considered important. We get 3/11 Certificate categories are significant and 3/12 Genre categories are significant, which we don’t consider significant variables because we don’t get the majority of each categorical significant.  
+
+```{r}
+BIC(IMDB_Rating.fit.lm)
+## [1] -187.8341
+IMDB_Rating.fit.lm=lm(IMDB_Rating~.-Certificate-Genre,data=IMDB)
+BIC(IMDB_Rating.fit.lm)
+## [1] -281.7874
+summary(IMDB_Rating.fit.lm)
+```  
+The BIC() also confirms that taking out Certificate and Genre variables improves the model. Therefore, our statistical significant factors that affect IMDBRating are Meta_score, No_of_Votes, Gross, Runtime and Released_year.  
+
+
+We fit the regression model again with Meta_score, No_of_Votes, Gross, Runtime and Released_year as predictors.  
+We got the model the p-value less than 2.2*10-16, we can confidently reject the null hypothesis that:
+B1= B2= B3= B4= B5= B6= B7=0  
+It means that at least one predictor demonstrates a statiscally significant relationship with IMDBRating, this confirms our observation. A Multiple R-squared value of 0.5413, it informs us that approximately 54.13% of the variance is explained by the model.   
+
+```{r}
+par(mfrow = c(2,2))
+plot(IMDB_Rating.fit.lm)
+
+```  
+By looking at the residual plot, it is appeared that we have a linear relationship. The normal Q-Q plot shows that the residuals are normally distributed. The scale-location plot shows that the residuals are spread equally along the range of predictors. Finally, it is appeared that the data contain extreme value.  
+Next, we proceed to train on IMDBRating and evaluate its prediction accuracy. We will perform a randomized 50:50 (training: testing) split on our modified dataset, calculate the mean squared error (MSE), and cross-validate 10 times.  
+```{r}
+IMDB.new=IMDB[c(-1,-4,-2)]
+MSE=rep (0,10)
+for (i in 1:10){
+  set.seed(i)
+  IMDB.train = sample(1:nrow(IMDB.new),nrow(IMDB.new)/2)
+  IMDB.test=IMDB.new[-IMDB.train,]
+  IMDB_Rating.fit.lm=lm(IMDB_Rating~.,data=IMDB.new, subset=IMDB.train)
+  yhat=predict(IMDB_Rating.fit.lm, newdata=IMDB.test)
+  MSE[i]= mean ((yhat-IMDB.test$IMDB_Rating)^2)
+}
+MSE
+mean(MSE)
+
+```  
+
+We obtained an average test MSE of 0.0417 across all 10 cross validation. MSE is the average squared difference between the estimated values that our model predicts given certain predictors and the actual value observed from the test sample. The closer to 0 the MSE gets, the better the model at predicting the response variable. As our model MSE is close to 0, we conclude that the quality of our model in terms of predicting IMDBRating is fairly accurate.  
+Decision Tree  
+The reason we use  this model is some of its advantages such as more accurate data, a more efficient way of handling data, and it also solves the issue of overfitting in a decision tree. We apply a tree-based model in our analysis plot (tree.model) which allows us to see the visualization of the data. Decision Trees are arranged in a hierarchical tree-like structure and are simple to understand and interpret.   
+Here we fit a regression tree to the IMDB data set. First create a test and training data  
+ 
+```{r}
+library(tree)
+set.seed(20)
+train = sample(1:nrow(IMDB),nrow(IMDB)/2)
+test <- IMDB[-train,]
+tree.IMDB = tree(IMDB$IMDB_Rating ~.,IMDB,subset = train)
+summary(tree.IMDB)
+
+```  
+
+12 terminal nodes are produced from this decision tree. No_of_Votes, Meta_score, Runtime, Gross, and Released_Year are used to analyze the tree. 
+Plot the tree  
+
+```{r}
+plot(tree.IMDB)
+text(tree.IMDB,pretty=0)
+```  
+We also did our tree pruning model using the following code. Growing the tree beyond a certain level of complexity leads to overfitting. 
+
+```{r}
+yhat = predict(tree.IMDB, newdata = test)
+mean((yhat - test$IMDB_Rating)^2)
+
+```
+
+```{r}
+cv.IMDB = cv.tree(tree.IMDB)
+plot(cv.IMDB$size,cv.IMDB$dev,type = "b")
+```  
+
+Now we will use the cv.tree() function to see whether pruning the tree will improve performance  
+
+
+```{r}
+cv.IMDB = cv.tree(tree.IMDB)
+plot(cv.IMDB$size,cv.IMDB$dev,type = "b")
+```  
+We can prune the tree to 4 nodes which would be best to use.  
+
+```{r}
+prune.IMDB = prune.tree(tree.IMDB,best = 4)
+plot(prune.IMDB)
+text(prune.IMDB,pretty = 0)
+```  
+```{r}
+yhat = predict(prune.IMDB,newdata = IMDB[-train,])
+test <- IMDB[-train,]
+mse.tree = mean((test$IMDB_Rating - yhat)^2)
+mse.tree
+```  
+Conclusion  
+In conclusion, both Linear Regression Model and Decision Tree performed relatively well at helping us to understand how the different variables affect the IMDB_Rating. The Linear Regression Model was our best predictive performing model since it contained the lower errors. The error from the Decision Tree is slightly higher than the Linear Regression Model but it is still good. It displays graphically, so we can easily visualize the variables. From both methods, we can see five predictors including No_of_Votes, Meta_score, Runtime, Gross, and Released_Year that have the most correlations to our response, IMDB_Rating.  
+
+
